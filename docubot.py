@@ -51,7 +51,6 @@ class DocuBot:
 
     def build_index(self, documents):
         """
-        TODO (Phase 1):
         Build a tiny inverted index mapping lowercase words to the documents
         they appear in.
 
@@ -60,14 +59,14 @@ class DocuBot:
             "token": ["AUTH.md", "API_REFERENCE.md"],
             "database": ["DATABASE.md"]
         }
-
-        Keep this simple: split on whitespace, lowercase tokens,
-        ignore punctuation if needed.
         """
         index = {}
         for filename, text in documents:
-            tokens = text.lower().strip(string.punctuation).split()
-            for token in tokens:
+            tokens = text.lower().split()
+            for raw_token in tokens:
+                token = raw_token.strip(string.punctuation)
+                if not token:
+                    continue
                 if token not in index:
                     index[token] = []
                 if filename not in index[token]:
@@ -88,8 +87,8 @@ class DocuBot:
         - Count how many appear in the text
         - Return the count as the score
         """
-        query_words = query.lower().strip(string.punctuation).split()
-        text_lower = text.lower().strip(string.punctuation)
+        query_words = [w.strip(string.punctuation) for w in query.lower().split()]
+        text_lower = [w.strip(string.punctuation) for w in text.lower().split()]
         score = 0
         for word in query_words:
             if word in text_lower:
@@ -104,11 +103,21 @@ class DocuBot:
         Return a list of (filename, text) sorted by score descending.
         """
         results = []
+        query_words = [w.strip(string.punctuation) for w in query.lower().split() if w]
         for filename, text in self.documents:
             score = self.score_document(query, text)
-            results.append((score, filename, text))
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            best_line = max(
+                lines,
+                key=lambda line: sum(
+                    line.lower().count(word) for word in query_words
+                ),
+                default="",
+            )
+            snippet = best_line if len(best_line) <= 200 else best_line[:200].rstrip() + "..."
+            results.append((score, filename, snippet))
         results.sort(key=lambda x: x[0], reverse=True)
-        return [(filename, text) for score, filename, text in results[:top_k]]
+        return [(filename, snippet) for score, filename, snippet in results[:top_k] if score > 0]
 
     # -----------------------------------------------------------
     # Answering Modes
